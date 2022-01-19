@@ -1,32 +1,26 @@
 #include "Game.h"
 //UTF-8 Коммент
 
-Game::Game(bool* PorgramStatus)
-{
-	IsRunning = PorgramStatus;
-	
-	/*TetroBlocks.loadFromFile(mRenderer, "Assets/Images/Tetro.png");
-	scoreFont = TTF_OpenFont("Assets/Fonts/Codename.ttf", 32);
-	if (scoreFont == nullptr)
-		SDL_Log("Unable to load font Assets/Fonts/Codename.ttf\n");
-	
-	for (int i = 0; i < 7; i++)
-		BlocksClip[i] = { i * 32,0,32,32 };
 
-	NextBlockText.loadFromRenderedText(mRenderer, scoreFont, "Следующий блок", scoreColor);*/
+int Game::FieldXPos = -5;
+int Game::FieldYPos = -10;
 
-
-	cubeData = { {
+std::array<std::array<float, 3>, 24> Game::cubeData = { {
 	{0, 1, -1}, {1, 1, -1}, {1, 0, -1}, {0, 0, -1},
 	{0, 1, 0}, {0, 1, -1}, {0, 0, -1}, {0, 0, 0},
 	{1, 1, 0}, {0, 1, 0}, {0, 0, 0}, {1, 0, 0},
 	{1, 1, -1}, {1, 1, 0}, {1, 0, 0}, {1, 0, -1},
 	{1, 1, -1}, {0, 1, -1}, {0, 1, 0}, {1, 1, 0},
 	{0, 0, -1}, {1, 0, -1}, {1, 0, 0}, {0, 0, 0}
-		} 
-	};
+		}
+};
+
+Game::Game(bool* PorgramStatus)
+{
+	IsRunning = PorgramStatus;
 
 	textureCoords = { {{0.25, 0}, {0, 0}, {0, 0.25}, {0.25, 0.25}} };
+
 }
 
 Game::~Game()
@@ -46,6 +40,7 @@ void Game::Init()
 	
 	for (int i = 0; i < 10; i++)
 		Field.at(i) = { 0 };
+
 	
 	//счет
 	for (int i = 0; i < 7; i++) {
@@ -71,6 +66,7 @@ void Game::Init()
 	NextBlock = new Tetromino;
 	CurBlock->StartMoving(Field);
 	CurBlock->Rotate(xPos, yPos);
+	IsGameRunning = true;
 }
 
 int Game::Run()
@@ -83,12 +79,7 @@ int Game::Run()
 		SpeedCount++;
 		bForceDown = (SpeedCount == Speed);
 		//каждый Speed тиков блок опускается на еденицу
-		
-		//обработка ввода
-		/*while (SDL_PollEvent(&E)) {
-			HandleEvents(E);
-		}
-		*/
+
 		if (bForceDown) {
 			SpeedCount = 0;
 			pieceCount++;
@@ -99,7 +90,8 @@ int Game::Run()
 			// Проверяем, можно ли сдвинуть вниз
 			if (CurBlock->DoesItFit(xPos, yPos + 1)) {
 				//если да - двигаем
-				yPos++;
+				moveDown++;
+				//yPos++;
 			}//если нет, значит блок достиг дна
 			else {
 				//закрепляем его на поле
@@ -162,11 +154,7 @@ int Game::Run()
 	}
 	return 0;
 }
-int moveDown = 0;
-int moveCounts = 0;
-int xCoord = -1;
-int yCoord = 2;
-Tetromino toDraw(6);
+
 void Game::Render() {
 	//SDL_SetRenderDrawColor(mRenderer, 245, 246, 250, 255);
 	//SDL_RenderClear(mRenderer);
@@ -186,28 +174,38 @@ void Game::Render() {
 	glDepthFunc(GL_ALWAYS);
 	glDepthFunc(GL_LESS);
 	
+	if (!IsGameRunning) {
+		for (auto& fly : flies) {
+			fly.Move();
+			fly.Render();
+		}
+		SYSTEMTIME endTime;
+		GetSystemTime(&endTime);
+		if (endTime.wMinute > beginTime.wMinute
+			|| endTime.wSecond - beginTime.wSecond > 5)
+			Init();
+		return;
+	}
 
 	if (moveDown > 0) {
-		DrawTetromino(xCoord, yCoord - (moveCounts * (1/8)), &toDraw);
+		int speedControl = 10;
+		if (forceMoveDown) speedControl /= 5;
+		DrawTetromino(FieldXPos + xPos, FieldYPos + yPos + (moveCounts * (1/ (float)speedControl)), CurBlock);
 		moveCounts++;
-		if (moveCounts == 7) {
+		if (moveCounts == speedControl - 1) {
 			moveCounts = 0;
 			moveDown--;
-			yCoord--;
+			if (CurBlock->DoesItFit(xPos, (int)yPos + 1))
+				yPos++;
+			else
+				forceMoveDown = false;
 		}
 	}else
-		DrawTetromino(xCoord, yCoord, &toDraw);
-	
-
-	
-
-
-
-
+		DrawTetromino(FieldXPos + xPos, FieldYPos + yPos, CurBlock);
 
 
 	DrawField(FieldXPos, FieldYPos, Field);
-	DrawTetromino(FieldXPos + xPos, FieldYPos + yPos, CurBlock);
+	//DrawTetromino(FieldXPos + xPos, FieldYPos + yPos, CurBlock);
 	DrawTetroCount();
 	DrawScore();
 	DrawNextBlock();
@@ -246,6 +244,13 @@ void Game::DrawCube(ColorRGBf color, Point3f offset, Point3f angles, float scale
 
 void Game::DrawField(int FieldX, int FieldY, FieldArray DrawableField)
 {
+	glBegin(GL_POLYGON);
+	glColor3f(0.862745, 0.866667, 0.882353);
+	glVertex3f(-0.31, -0.965, 0.4);
+	glVertex3f(0.255, -0.965, 0.4);
+	glVertex3f(0.255, 0.965, 0.4);
+	glVertex3f(-0.31, 0.965, 0.4);
+	glEnd();
 
 	for(int x = 0; x < 10; x++)
 		for (int y = 0; y < 20; y++) {
@@ -254,49 +259,19 @@ void Game::DrawField(int FieldX, int FieldY, FieldArray DrawableField)
 				DrawCube(colors[DrawableField[x][y] - 1], { (float)(x + FieldX),-(float)(y + FieldY),0 }, { angle,0,0 }, 10);
 			}
 		}
-	return;
 }
 
-//void Game::HandleEvents(SDL_Event& E)
-//{
-//	switch (E.type)
-//	{
-//	case SDL_QUIT:
-//		*IsRunning = false;
-//		break;
-//	case SDL_KEYUP:
-//		switch (E.key.keysym.sym)
-//		{
-//		case SDLK_UP:
-//			CurBlock->Rotate(xPos,yPos);
-//			break;
-//
-//		case SDLK_DOWN:
-//			yPos += (CurBlock->DoesItFit(xPos, yPos + 1)) ? 1 : 0;
-//			break;
-//		
-//		case SDLK_LEFT:
-//			xPos -= (CurBlock->DoesItFit(xPos - 1, yPos)) ? 1 : 0;
-//			break;
-//
-//		case SDLK_RIGHT:
-//			xPos += (CurBlock->DoesItFit(xPos + 1, yPos)) ? 1 : 0;
-//			break;
-//		}
-//		break;
-//	}
-//}
 
-void Game::DrawTetromino(float xPos, float yPos, Tetromino* Target)
+void Game::DrawTetromino(float xPos, float yPos, Tetromino* Target, Point3f angles)
 {
 	if (Target == nullptr)
 		return;
 	float angle = -(yPos);
 	std::array<std::array<int, 4>, 4> Figure = Target->GetFigure();
-	for(int x = 0; x < 4; x++)
-		for (int y = 0; y < 4; y++) 
+	for (int x = 0; x < 4; x++)
+		for (int y = 0; y < 4; y++)
 			if (Figure[y][x])
-				DrawCube(colors[Target->GetType()-1], { (float)(x + xPos),-(float)(y + yPos),0}, { angle,0,0}, 10);
+				DrawCube(colors[Target->GetType() - 1], { (float)(x + xPos),-(float)(y + yPos),0 }, { angle,angles.y,angles.z }, 10);
 }
 
 void Game::renderMino(
@@ -334,15 +309,12 @@ void Game::HandleInput(WPARAM key)
 {
 	switch (key)
 	{
-
 	case VK_UP:
-		yCoord++;
 		CurBlock->Rotate(xPos, yPos);
 		break;
 
 	case VK_DOWN:
-		moveDown++;
-		yPos += (CurBlock->DoesItFit(xPos, yPos + 1)) ? 1 : 0;
+		moveDown += (CurBlock->DoesItFit(xPos, yPos + 1) && !moveDown) ? 1 : 0;
 		break;
 
 	case VK_LEFT:
@@ -351,6 +323,12 @@ void Game::HandleInput(WPARAM key)
 
 	case VK_RIGHT:
 		xPos += (CurBlock->DoesItFit(xPos + 1, yPos)) ? 1 : 0;
+		break;
+	case VK_SPACE:
+		while (CurBlock->DoesItFit(xPos, yPos +  moveDown))
+			moveDown++;
+		bForceDown = true;
+		forceMoveDown = true;
 		break;
 	}
 }
@@ -408,40 +386,25 @@ void Game::DrawScore()
 
 void Game::DrawNextBlock()
 {
-	int x = FieldXPos + 32 * 10 + 100;
-	//NextBlockText.render(x, 100);
-	DrawTetromino(x, 150, NextBlock);
+	glPushMatrix();
+	int x = FieldXPos + 10;
+	glTranslatef(0.5, 0.5, 0);
+	showAngle += 45 * timeOfFrame;
+	DrawTetromino(0, 0, NextBlock, { 0, showAngle ,0 });
+	DrawCube({ 0.5,0.5,0.5 }, { 0,0,-2 }, { 0,0,0 }, 4);
+
+	glPopMatrix();
 }
 
 void Game::GameOver()
 {
-	/*SDL_SetRenderDrawColor(mRenderer, 245, 246, 250, 255);
-	SDL_RenderClear(mRenderer);
 	
-	TTF_Font* Font = TTF_OpenFont("Assets/Fonts/Codename.ttf", 64);
-	LTexture GameOver;
-	GameOver.loadFromRenderedText(mRenderer, Font, "Игра окончена", scoreColor);
-	TTF_CloseFont(Font);
-
-	GameOver.render(1280 / 2 - GameOver.getWidth() / 2, 150);
-
-	std::string Score = "Итоговый счет: " + std::to_string(GameScore);
-	ScoreImage.loadFromRenderedText(mRenderer, scoreFont, Score, scoreColor);
-
-	ScoreImage.render(1280 / 2 - ScoreImage.getWidth() / 2, 350);
-
-	SDL_RenderPresent(mRenderer);
-
-	bool Wait = true;
-
-	while (Wait && *IsRunning) {
-		while (SDL_PollEvent(&E)) {
-			if (E.type == SDL_QUIT)
-				*IsRunning = false;
-			if (E.type == SDL_KEYDOWN)
-				Wait = false;
+	flies.reserve(200);
+	for (int x = 0; x < 10; x++)
+		for (int y = 0; y < 20; y++) {
+			if (Field[x][y]) {
+				flies.emplace_back(x, y, Field[x][y]);
+			}
 		}
-	}
-	GameOver.free();*/
-
+	GetSystemTime(&beginTime);
 }

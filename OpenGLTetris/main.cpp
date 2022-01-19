@@ -99,6 +99,8 @@ int WINAPI WinMain(HINSTANCE hInstance,
 	//ChangeDisplaySettings(&dmScreenSettings,CDS_FULLSCREEN);
 	// Переключение в полный экран
 
+	srand(time(nullptr));
+
 	ShowWindow(hWnd, SW_SHOW);
 	UpdateWindow(hWnd);
 	SetFocus(hWnd);
