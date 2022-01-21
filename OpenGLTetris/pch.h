@@ -1,0 +1,11 @@
+#pragma once
+#include <iostream>
+#include <array>
+#include <vector>
+#include "Tetris/Tetromino.h"
+#include <glad/glad.h>
+#include <windows.h>
+//#include <gl/GL.h>
+//#include <gl/GLU.h>
+//#include <gl/glut.h>
+#include <fstream>

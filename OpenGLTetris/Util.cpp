@@ -15,7 +15,7 @@ void glColor3dRGB(ColorRGB col)
 	glColor3d(col.r / 255., col.g / 255., col.b / 255.);
 }
 
-void glColor3f(ColorRGBf col)
+void myGLColor3f(ColorRGBf col)
 {
 	glColor3f(col.r, col.g, col.b);
 }

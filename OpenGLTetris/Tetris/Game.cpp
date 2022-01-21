@@ -1,9 +1,8 @@
 #include "Game.h"
-//UTF-8 Коммент
-
 
 int Game::FieldXPos = -5;
 int Game::FieldYPos = -10;
+
 
 std::array<std::array<float, 3>, 24> Game::cubeData = { {
 	{0, 1, -1}, {1, 1, -1}, {1, 0, -1}, {0, 0, -1},
@@ -14,6 +13,10 @@ std::array<std::array<float, 3>, 24> Game::cubeData = { {
 	{0, 0, -1}, {1, 0, -1}, {1, 0, 0}, {0, 0, 0}
 		}
 };
+
+
+float vertex[] = { -1,-1,1, 1,-1,1, 1,1,1, -1,1,1 };
+float normal[] = { -1,-1,1, 1,-1,1, 1,1,1, -1,1,1 };
 
 Game::Game(bool* PorgramStatus)
 {
@@ -37,7 +40,8 @@ Game::~Game()
 void Game::Init()
 {
 	//поле
-	
+	texture = _loadTexture("img/fon.bmp");
+
 	for (int i = 0; i < 10; i++)
 		Field.at(i) = { 0 };
 
@@ -45,13 +49,10 @@ void Game::Init()
 	//счет
 	for (int i = 0; i < 7; i++) {
 		aScoreTetromino[i] = new Tetromino(i + 1);
-		//std::string Score = "x" + std::to_string(tetroCount[i]);
-		//countText[i].loadFromRenderedText(mRenderer, scoreFont, Score, scoreColor);
+		
 	}
 
-	//statsText.loadFromRenderedText(mRenderer, scoreFont, "Статистика", scoreColor);
 
-	UpdateScore(0);
 
 
 	aScoreTetromino[0]->ForceRotate();
@@ -67,6 +68,11 @@ void Game::Init()
 	CurBlock->StartMoving(Field);
 	CurBlock->Rotate(xPos, yPos);
 	IsGameRunning = true;
+	float xCam = 0;
+	float yCam = 0;
+	lightning = false;
+	flies.clear();
+	loadTextureCube();
 }
 
 int Game::Run()
@@ -103,11 +109,16 @@ int Game::Run()
 					}
 
 				++tetroCount[CurBlock->GetType() - 1];
-				UpdateTetroCount();
 				//вызываем новый блок
+				Tetromino* temp = new Tetromino();
+				//алгоритм рандомизации
+				if (temp->GetType() == NextBlock->GetType()) {
+					delete temp;
+					temp = new Tetromino();
+				}
 				delete CurBlock;
 				CurBlock = NextBlock;
-				NextBlock = new Tetromino;
+				NextBlock = temp;
 				CurBlock->StartMoving(Field);
 				xPos = 3;
 				yPos = 0;
@@ -129,8 +140,6 @@ int Game::Run()
 					}
 				}
 
-				if (!vLines.empty())
-					UpdateScore(vLines.size());
 
 			}
 		}
@@ -156,12 +165,10 @@ int Game::Run()
 }
 
 void Game::Render() {
-	//SDL_SetRenderDrawColor(mRenderer, 245, 246, 250, 255);
-	//SDL_RenderClear(mRenderer);
-
 	glClearColor(0.9607843137254902, 0.9647058823529412, 0.9803921568627451, 1);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
+	glDisable(GL_CULL_FACE);
 
 	glEnable(GL_LINE_SMOOTH);
 	glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
@@ -170,15 +177,36 @@ void Game::Render() {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+	if (lightning) {
+		glEnable(GL_LIGHTING);
+		glEnable(GL_LIGHT0);
+		glEnable(GL_COLOR_MATERIAL);
+		glEnable(GL_NORMALIZE);
+	}
+	else {
+		glDisable(GL_LIGHTING);
+		glDisable(GL_LIGHT0);
+		glDisable(GL_COLOR_MATERIAL);
+		glDisable(GL_NORMALIZE);
+	}
+
+
 	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_ALWAYS);
+	//glDepthFunc(GL_ALWAYS);
 	glDepthFunc(GL_LESS);
+	//float position[] = { 0,1,3,0 };
+	float position[] = { 10,5,10,0 };
 	
+
 	if (!IsGameRunning) {
+		glPushMatrix();
+		MoveCamera();
+		DrawSkybox();
 		for (auto& fly : flies) {
 			fly.Move();
 			fly.Render();
 		}
+		glPopMatrix();
 		SYSTEMTIME endTime;
 		GetSystemTime(&endTime);
 		if (endTime.wMinute > beginTime.wMinute
@@ -187,6 +215,12 @@ void Game::Render() {
 		return;
 	}
 
+	glPushMatrix();
+	MoveCamera();
+	DrawSkybox();
+	DrawField(FieldXPos, FieldYPos, Field);
+
+	glLightfv(GL_LIGHT0, GL_POSITION, position);
 	if (moveDown > 0) {
 		int speedControl = 10;
 		if (forceMoveDown) speedControl /= 5;
@@ -195,20 +229,28 @@ void Game::Render() {
 		if (moveCounts == speedControl - 1) {
 			moveCounts = 0;
 			moveDown--;
-			if (CurBlock->DoesItFit(xPos, (int)yPos + 1))
+			if (CurBlock->DoesItFit(xPos, (int)yPos + 1) && CurBlock->DoesItFit(xPos, (int)yPos))
 				yPos++;
 			else
 				forceMoveDown = false;
 		}
 	}else
 		DrawTetromino(FieldXPos + xPos, FieldYPos + yPos, CurBlock);
-
-
-	DrawField(FieldXPos, FieldYPos, Field);
-	//DrawTetromino(FieldXPos + xPos, FieldYPos + yPos, CurBlock);
-	DrawTetroCount();
-	DrawScore();
 	DrawNextBlock();
+
+	glPopMatrix();
+}
+
+void Draw() {
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glEnableClientState(GL_NORMAL_ARRAY);
+		glVertexPointer(3, GL_FLOAT, 0, vertex);
+		glNormalPointer(GL_FLOAT, 0, normal);
+		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+		glDrawArrays(GL_LINE_STRIP, 0, 4);
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_NORMAL_ARRAY);
+
 }
 
 void Game::DrawCube(ColorRGBf color, Point3f offset, Point3f angles, float scale)
@@ -218,11 +260,28 @@ void Game::DrawCube(ColorRGBf color, Point3f offset, Point3f angles, float scale
 	glRotatef(angles.x, 1.0, 0.0, 0.0);		//поворот относи-тельно оси X
 	glRotatef(angles.y, 0.0, 1.0, 0.0);
 	glRotatef(angles.z, 0.0, 0.0, 1.0);
-
+	
+	/*myGLColor3f(color);
+	glScalef(0.09, 0.09, 0.09);
+	glTranslatef(offset.x - 0.5, offset.y + 0.5 , offset.z);
+	Draw();
+	glRotatef(90, 1, 0, 0);
+	Draw();
+	glRotatef(90, 1, 0, 0);
+	Draw();
+	glRotatef(90, 1, 0, 0);
+	Draw(); 
+	glRotatef(90, 0, 1, 0);
+	Draw();
+	glRotatef(180, 0, 1, 0);
+	Draw();*/
+	//glMaterialf(GL_FRONT_AND_BACK, GL_SPECULAR,0);
 	glBegin(GL_POLYGON);
-	glColor3f(color);
-	for (int i = 0; i < 24; i++)
+	myGLColor3f(color);
+	for (int i = 0; i < 24; i++) {
+		glNormal3f(cubeData[i][0], cubeData[i][1], cubeData[i][2]);
 		glVertex3f((cubeData[i][0] - 0.5 + offset.x) / scale, (cubeData[i][1] - 0.5 + offset.y) / scale, (cubeData[i][2] - 0.5 + offset.z) / scale);
+	}
 	glEnd();
 	glLineWidth(2);
 	glBegin(GL_LINE_STRIP);
@@ -241,16 +300,55 @@ void Game::DrawCube(ColorRGBf color, Point3f offset, Point3f angles, float scale
 
 }
 
+void Game::MoveCamera()
+{
+	
+	glRotatef(xCam, 1.0, 0.0, 0.0);
+	glRotatef(yCam, 0.0, 1.0, 0.0);
+
+
+	
+}
+
+const float PI = 3.14159265358979323846;
 
 void Game::DrawField(int FieldX, int FieldY, FieldArray DrawableField)
 {
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, texture);
 	glBegin(GL_POLYGON);
-	glColor3f(0.862745, 0.866667, 0.882353);
-	glVertex3f(-0.31, -0.965, 0.4);
-	glVertex3f(0.255, -0.965, 0.4);
-	glVertex3f(0.255, 0.965, 0.4);
-	glVertex3f(-0.31, 0.965, 0.4);
+		glColor4f(1, 1, 1, 0.5);
+		glNormal3f(0, 0, 1);
+		glTexCoord2f(0.0, 0.0);
+		glVertex3f(-0.31, -0.965, 0.4);
+		glNormal3f(0, 0, 1);
+		glTexCoord2f(cos(xCam * 180 / PI), 0.0 );
+		glVertex3f(0.255, -0.965, 0.4);
+		glNormal3f(0, 0, 1);
+		glTexCoord2f(cos(xCam * 180 / PI) - sinf(yCam * 180 / PI), sinf(yCam * 180 / PI) + cos(xCam * 180 / PI));
+		glVertex3f(0.255, 0.965, 0.4);
+		glNormal3f(0, 0, 1);
+		glTexCoord2f(0, sinf(yCam * 180 / PI));
+		glVertex3f(-0.31, 0.965, 0.4);
 	glEnd();
+	glDisable(GL_TEXTURE_2D);
+
+	auto res = glGetError();
+
+	glPushMatrix();
+	glColor3f(0, 1, 0);
+	//glRotatef(90, 0, 1, 0);
+	//glTranslatef(0, 11, 0);
+	//glScalef(10, 10, 10);
+	/*glBegin(GL_POLYGON);
+	glVertex3f(-5, -10, -10);
+	glVertex3f(-5, -10, 10);
+	glVertex3f(-5, 10, -10);
+	glVertex3f(-5, 10, 10);
+	glEnd();*/
+
+	glPopMatrix();
+
 
 	for(int x = 0; x < 10; x++)
 		for (int y = 0; y < 20; y++) {
@@ -260,6 +358,93 @@ void Game::DrawField(int FieldX, int FieldY, FieldArray DrawableField)
 			}
 		}
 }
+
+//float cube[] = { -3,-3,3, 3,-3,3, 3,3,3, -3,3,3, -3,-3,-3, 3,-3,-3, 3,3,-3, -3,3,-3 };
+
+
+float cube[] = { -1,-1,1, 1,-1,1, 1,1,1, -1,1,1,
+				- 1,-1,-1, 1,-1,-1, 1,1,-1, -1,1,-1 };
+
+
+unsigned int cubeInd[] = { 0,1,2,2,3,0, 4,5,6,6,7,4,
+							1,5,6,6,2,1, 0,4,7,7,3,0,
+							3,2,6,6,7,3, 0,1,5,5,4,0 };
+
+int cubeIntCnt = sizeof(cubeInd) / sizeof(cubeInd[0]);
+
+const char* skybox[6] = {	"img/Right.bmp",
+							"img/Left.bmp",
+							"img/Top.bmp",
+							"img/Bottom.bmp",
+							"img/Front.bmp",
+							"img/Back.bmp"
+};
+float normals[24];
+void Game::loadTextureCube() {
+	int width = 1024;
+	int height = 1024;
+	glGenTextures(1, &	skyboxTextures);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, skyboxTextures);
+	for (int i = 0; i < 6; i++) {
+		
+		std::vector<unsigned char> data = _readFile(skybox[i]);
+
+		for (int i = 0; i < width * height; ++i)
+		{
+			int index = i * 3;
+			unsigned char B, R;
+			B = data[index];
+			R = data[index + 2];
+
+			data[index] = R;
+			data[index + 2] = B;
+		}
+		unsigned char* set = &data[0];
+
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data.data());
+		data.clear();
+		//gluBuild2DMipmaps(GL_TEXTURE_2D, 3, width, height, GL_RGB, GL_UNSIGNED_BYTE, set);
+	}
+	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+	for (int i = 0; i < 24; i++)
+		normals[i] = -cube[i];
+}
+
+void Game::DrawSkybox()
+{
+	glUseProgram(0);
+	glEnable(GL_TEXTURE_CUBE_MAP);
+	glColor3f(1, 1, 1);
+	glPushMatrix();
+	glScalef(1.2, 1.2, 1.2);
+	glTranslatef(0, 0, -0.5);
+	glRotatef(180, 1, 0, 0);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, skyboxTextures);
+
+	glVertexPointer(3, GL_FLOAT, 0, cube);
+	glTexCoordPointer(3, GL_FLOAT, 0, cube);
+	glNormalPointer(GL_FLOAT, 3, normals);
+
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+	glEnableClientState(GL_NORMAL_ARRAY);
+		glDrawElements(GL_TRIANGLES, cubeIntCnt, GL_UNSIGNED_INT, cubeInd);
+
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	glDisableClientState(GL_NORMAL_ARRAY);
+	glPopMatrix();
+	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+}
+
+
 
 
 void Game::DrawTetromino(float xPos, float yPos, Tetromino* Target, Point3f angles)
@@ -318,11 +503,11 @@ void Game::HandleInput(WPARAM key)
 		break;
 
 	case VK_LEFT:
-		xPos -= (CurBlock->DoesItFit(xPos - 1, yPos)) ? 1 : 0;
+		xPos -= (CurBlock->DoesItFit(xPos - 1, yPos ) && !moveDown) ? 1 : 0;
 		break;
 
 	case VK_RIGHT:
-		xPos += (CurBlock->DoesItFit(xPos + 1, yPos)) ? 1 : 0;
+		xPos += (CurBlock->DoesItFit(xPos + 1, yPos) && !moveDown) ? 1 : 0;
 		break;
 	case VK_SPACE:
 		while (CurBlock->DoesItFit(xPos, yPos +  moveDown))
@@ -330,59 +515,36 @@ void Game::HandleInput(WPARAM key)
 		bForceDown = true;
 		forceMoveDown = true;
 		break;
-	}
-}
-
-void Game::UpdateTetroCount()
-{
-	/*for (int i = 0; i < 7; i++) {
-		std::string Score = "x" + std::to_string(tetroCount[i]);
-		countText[i].loadFromRenderedText(mRenderer, scoreFont, Score, scoreColor);
-	}*/
-}
-
-void Game::DrawTetroCount()
-{
-	int xCoords = 0;
-	int yCoords = 15;
-	//for (int i = 0; i < 7; i++) {
-		//DrawTetromino(xCoords, yCoords + 96 * i, aScoreTetromino[i]);
-		//countText[i].render(xCoords + 128, 64 +  yCoords + 96 * i);
-	//}
-
-	//statsText.render(xCoords, yCoords);
-
-}
-
-void Game::UpdateScore(int LinesCount)
-{
-	switch (LinesCount)
-	{
-	case 0:
-		GameScore = 0;
+	case 'W':
+		xCam += 5.0f;
+		if (xCam > 360.0f)
+			xCam -= 360.0f;
 		break;
-	case 1:
-		GameScore += 100;
+	case 'S':
+		xCam -= 5.0f;
+		if (xCam < 0.0f)
+			xCam += 360.0f;
 		break;
-	case 2:
-		GameScore += 300;
+	case 'A':
+		yCam += 5.0f;
+		if (yCam > 360.0f)
+			yCam -= 360.0f;
 		break;
-	case 3:
-		GameScore += 700;
+	case 'D':
+		yCam -= 5.0f;
+		if (yCam < 0.0f)
+			yCam += 360.0f;
 		break;
-	case 4:
-		GameScore += 1500;
+	case 'R':
+		xCam = 0.0f;
+		yCam = 0.0f;
+		break;
+	case 'L':
+		lightning = !lightning;
 		break;
 	}
-
-	//std::string Score = "Текущий счет: " + std::to_string(GameScore);
-	//ScoreImage.loadFromRenderedText(mRenderer, scoreFont, Score, scoreColor);
 }
 
-void Game::DrawScore()
-{
-	//ScoreImage.render(FieldXPos, 10);
-}
 
 void Game::DrawNextBlock()
 {
@@ -390,7 +552,7 @@ void Game::DrawNextBlock()
 	int x = FieldXPos + 10;
 	glTranslatef(0.5, 0.5, 0);
 	showAngle += 45 * timeOfFrame;
-	DrawTetromino(0, 0, NextBlock, { 0, showAngle ,0 });
+	DrawTetromino(-2, 0, NextBlock, { 0, showAngle ,0 });
 	DrawCube({ 0.5,0.5,0.5 }, { 0,0,-2 }, { 0,0,0 }, 4);
 
 	glPopMatrix();
@@ -398,7 +560,7 @@ void Game::DrawNextBlock()
 
 void Game::GameOver()
 {
-	
+
 	flies.reserve(200);
 	for (int x = 0; x < 10; x++)
 		for (int y = 0; y < 20; y++) {
@@ -407,4 +569,59 @@ void Game::GameOver()
 			}
 		}
 	GetSystemTime(&beginTime);
+}
+
+std::vector<unsigned char> Game::_readFile(const char* path)
+{
+	std::ifstream file(path, std::ios::binary);
+
+	std::streampos size;
+	file.seekg(0, std::ios::end);
+	size = file.tellg();
+	file.seekg(0, std::ios::beg);
+
+	std::vector<unsigned char> data(size);
+	file.read((char*)&data[0], size);
+
+	return data;
+}
+
+GLuint Game::_loadTexture(const char* path)
+{
+	int width = 750;
+	int height = 750;
+	GLuint tempText;
+	std::vector<unsigned char> data = _readFile(path);
+
+	for (int i = 0; i < width * height; ++i)
+	{
+		int index = i * 3;
+		unsigned char B, R;
+		B = data[index];
+		R = data[index + 2];
+
+		data[index] = R;
+		data[index + 2] = B;
+	}
+	unsigned char* set = &data[0];
+	glGenTextures(1, &tempText); //генерация уникального имени
+	auto res = glGetError();
+	glBindTexture(GL_TEXTURE_2D, tempText); //первичное связывание
+	//Режимы фильтрации
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, set);
+
+	//Build2DMipmaps(GL_TEXTURE_2D, 3, width, height, GL_RGB, GL_UNSIGNED_BYTE, set); //связывание изображения с текстурой
+
+	
+	//Фильтрация со смешиванием и без
+	//glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE); //смешивания Взаимодействие с поверхностью
+	glBindTexture(GL_TEXTURE_2D, 0);
+	data.clear();
+	return tempText;
 }

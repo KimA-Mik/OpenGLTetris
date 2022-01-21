@@ -1,10 +1,4 @@
-#include <iostream>
-#include <windows.h>
-#include <gl/GL.h>
-#include <gl/GLU.h>
-#include <gl/glut.h>
-#include <math.h>
-#include "Util.h"
+#include "pch.h"
 #include "Tetris/Game.h"
 
 constexpr int width = 1600;
@@ -96,7 +90,7 @@ int WINAPI WinMain(HINSTANCE hInstance,
 	dmScreenSettings.dmFields = DM_PELSWIDTH |
 		DM_PELSHEIGHT;
 	// Режим Пикселя
-	//ChangeDisplaySettings(&dmScreenSettings,CDS_FULLSCREEN);
+	//ChangeDisplaySettings(&dmScreenSettings, CDS_RESET);
 	// Переключение в полный экран
 
 	srand(time(nullptr));
@@ -139,7 +133,9 @@ int WINAPI WinMain(HINSTANCE hInstance,
 
 GLvoid InitGL(GLsizei Width, GLsizei Height)	//Вызвать после создания окна GL
 {
+	gladLoadGL();
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+
 	// Очистка экрана в черный цвет
 }
 
@@ -154,28 +150,6 @@ GLvoid ReSizeGLScene(GLsizei Width, GLsizei Height)
 	//перспективных преобразований
 }
 
-void drawText(const char* text, int length, int x, int y)
-{
-	glMatrixMode(GL_PROJECTION);
-	double* matrix = new double[16];
-	glGetDoublev(GL_PROJECTION_MATRIX, matrix);
-	glLoadIdentity();
-	glOrtho(0, 400, 0, 400, -5, 5);
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-	glPushMatrix();
-	glLoadIdentity();
-	glRasterPos2i(x, y);
-	for (int i = 0; i < length; i++)
-	{
-		glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (int)text[i]);
-	}
-	glPopMatrix();
-	glMatrixMode(GL_PROJECTION);
-	glLoadMatrixd(matrix);
-	glMatrixMode(GL_MODELVIEW);
-
-}
 
 
 LRESULT CALLBACK WndProc(HWND	hWnd,
@@ -212,7 +186,6 @@ LRESULT CALLBACK WndProc(HWND	hWnd,
 	switch (message)	// Тип сообщения
 	{
 	case WM_CREATE:
-		tetroGL.Init();
 		hDC = GetDC(hWnd);
 		// Получить контекст устройства для окна
 		PixelFormat = ChoosePixelFormat(hDC, &pfd);
@@ -251,7 +224,7 @@ LRESULT CALLBACK WndProc(HWND	hWnd,
 		}
 		GetClientRect(hWnd, &Screen);
 		InitGL(Screen.right, Screen.bottom);
-
+		tetroGL.Init();
 		break;
 
 	case WM_DESTROY:

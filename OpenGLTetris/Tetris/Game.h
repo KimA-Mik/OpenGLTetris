@@ -1,13 +1,9 @@
 #pragma once
-#include <iostream>
-#include <array>
-#include <vector>
-#include "Tetromino.h"
+#include "../pch.h"
 #include "../Util.h"
-#include <windows.h>
-#include <gl/GL.h>
-#include <gl/GLU.h>
-#include <gl/glut.h>
+
+
+
 #define FieldArray std::array<std::array<int,20>,10>
 #define TetroArray std::array<std::array<int, 4>, 4>
 
@@ -52,31 +48,32 @@ private:
 	//стстистика установленныъ блоков
 	std::array<Tetromino*, 7> aScoreTetromino = { 0 };
 	std::array<int, 7> tetroCount = { 0 };
-	void UpdateTetroCount();
-	void DrawTetroCount();
 	void renderMino(const float x, const float y, const float z, const char& color);
 	void renderTetromino(
 		const Tetromino* Target,
 		const char& state,
 		float x, float y, const float z, const float scale );
 	static void DrawCube(ColorRGBf color, Point3f offset = {0,0,0}, Point3f angles = {0,0,0}, float scale = 1);
+	void MoveCamera();
 
 protected:
 
 	static int FieldXPos;
 	static int FieldYPos;
 
+	float xCam;
+	float yCam;
+
 
 	int xPos = 3;
 	int yPos = 0;
+
+	bool lightning;
 	
 	void DrawField(int FieldX, int FieldY, FieldArray Field);
-
-	//void HandleEvents(SDL_Event& E);
+	void DrawSkybox();
 
 	void DrawTetromino(float xPos, float yPso, Tetromino* Target, Point3f angles = { 0,0,0 });
-	void UpdateScore(int LinesCount);
-	virtual void DrawScore();
 	virtual void DrawNextBlock();
 
 	virtual void GameOver();
@@ -107,6 +104,14 @@ protected:
 	bool forceMoveDown = false;
 	int moveCounts = 0;
 	SYSTEMTIME beginTime;
+
+	std::vector<unsigned char> _readFile(const char* path);
+	GLuint _loadTexture(const char* path);
+	GLuint texture;
+	GLuint skyboxTextures;
+	void loadTextureCube();
+
+
 
 
 	class flyingCube {
